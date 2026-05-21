@@ -190,7 +190,7 @@ Large
 \end{tabular}
 \end{table}
 
-\paragraph{Key findings.} \textbf{DQN achieves the highest mean return} across all configurations, closely matching Value Iteration on Small (4.97 vs.\ 5.00). \textbf{CVaR-DQN consistently achieves higher CVaR$_{10\%}$}, confirming more robust schedules: on Medium, DQN gets 4.86 mean vs.\ CVaR-DQN's 4.50 ($-7\%$ mean) but CVaR$_{10\%}$ flips to 2.86 vs.\ 3.19 ($+12\%$ worst-case)---the mean-risk trade-off the algorithm is designed to make. SC-CVaR-DQN is competitive on mean return but underperforms on aggregate CVaR; we analyze its specific behavior in \S\ref{sec:pilot}. Among heuristics, Most-Urgent-First performs best. All three deep RL agents converge within $\sim$2{,}000 episodes (Appendix Figure~\ref{fig:learning}); a representative-config visualization (Medium) is in Figure~\ref{fig:comparison} (appendix).
+\paragraph{Key findings.} \textbf{DQN achieves the highest mean return} across all configurations, closely matching Value Iteration on Small (4.97 vs.\ 5.00). \textbf{CVaR-DQN consistently achieves higher CVaR$_{10\%}$}, confirming more robust schedules: on Medium, DQN gets 4.86 mean vs.\ CVaR-DQN's 4.50 ($-7\%$ mean) but CVaR$_{10\%}$ flips to 2.86 vs.\ 3.19 ($+12\%$ worst-case)---the mean-risk trade-off the algorithm is designed to make. SC-CVaR-DQN is competitive on mean return but underperforms on aggregate CVaR; we analyze its specific behavior in \S\ref{sec:pilot}. Among heuristics, Most-Urgent-First performs best. All three deep RL agents converge within $\sim$2{,}000 episodes (Appendix Figure~\ref{fig:learning}); the full per-agent comparison for every configuration is in Appendix Figure~\ref{fig:comparison}.
 
 \subsection{Ablation Study}
 
@@ -361,11 +361,16 @@ H.~Van~Hasselt, A.~Guez, and D.~Silver.
     \end{subfigure}
     \\
     \begin{subfigure}[b]{\textwidth}
+        \includegraphics[width=\textwidth]{comparison_medium.png}
+        \caption{Medium configuration}
+    \end{subfigure}
+    \\
+    \begin{subfigure}[b]{\textwidth}
         \includegraphics[width=\textwidth]{comparison_large.png}
         \caption{Large configuration}
     \end{subfigure}
-    \caption{Agent comparison on Small and Large configurations (the Medium-config version appears in the main text as Figure~\ref{fig:comparison}).}
-    \label{fig:comparison_supp}
+    \caption{Per-agent comparison across all three configurations. Bars sorted by CVaR$_{10\%}$; ``worst achievable subject failure'' excludes universally-infeasible subjects (failure 1.0 even for Value Iteration).}
+    \label{fig:comparison}
 \end{figure}
 
 \begin{figure}[H]
