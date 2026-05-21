@@ -4,7 +4,7 @@ Risk-sensitive reinforcement learning for optimal exam study scheduling. Compare
 
 Course project for *Reinforcement Learning and Decision Making Under Uncertainty* — University of Neuchâtel, Spring 2026.
 
-Project report: [`report/report_formal.pdf`](report/report_formal.pdf).
+Project report: [`report/report_formal`](report/report_formal.tex).
 
 ## Setup
 
