@@ -76,7 +76,10 @@
     {Group:}\\
     {Kobiljon Muhammadov}
 
-    \vspace{2cm}
+    \vspace{0.6cm}
+    {\small Code repository: \url{https://github.com/muhammadov-q/cvar-dqn-study-scheduling}}
+
+    \vspace{1.4cm}
     \begin{tabular}[b]{|l|r|}
     \hline
     Introduction, Related Work, Preliminaries &\qquad\qquad/\;\;5\\\hline
@@ -101,7 +104,7 @@ We address optimal exam study scheduling using reinforcement learning. A student
 \section{Introduction}
 \label{sec:intro}
 
-Students face a sequential decision problem when preparing for exams: which subject to study each day, given limited time, stochastic cognitive energy, and exponential forgetting. Standard reinforcement-learning agents maximize expected total score, which can lead to policies that sacrifice low-weight exams to inflate the aggregate. In practice, failing even one exam carries severe consequences. We apply \textbf{CVaR-DQN}---a distributional RL method that optimizes the Conditional Value at Risk \citep{chow2015,dabney2018}---to produce risk-sensitive study schedules that protect against worst-case outcomes, and additionally explore an extension that imposes per-subject constraints.\footnote{Code and experiment scripts: \url{https://github.com/muhammadov-q/cvar-dqn-exam-scheduler}}
+Students face a sequential decision problem when preparing for exams: which subject to study each day, given limited time, stochastic cognitive energy, and exponential forgetting. Standard reinforcement-learning agents maximize expected total score, which can lead to policies that sacrifice low-weight exams to inflate the aggregate. In practice, failing even one exam carries severe consequences. We apply \textbf{CVaR-DQN}---a distributional RL method that optimizes the Conditional Value at Risk \citep{chow2015,dabney2018}---to produce risk-sensitive study schedules that protect against worst-case outcomes, and additionally explore an extension that imposes per-subject constraints.\footnote{Code and experiment scripts: \url{https://github.com/muhammadov-q/cvar-dqn-study-scheduling}}
 
 \paragraph{Related work.} RL has been applied to flashcard review timing \citep{reddy2017} and broader educational sequencing \citep{doroudi2019}. We build on DQN \citep{mnih2015} and Double DQN \citep{vanhasselt2016}, and extend QR-DQN \citep{dabney2018} with CVaR action selection \citep{chow2015}. Our pilot extension combines CMDP-style constrained optimization \citep{altman1999,achiam2017} with distributional RL by constraining per-subject CVaR.
 
@@ -119,30 +122,112 @@ We model exam preparation as a finite-horizon MDP. The \textbf{state} is $s = (\
 \end{align}
 where $\lambda_i \in [0.05, 0.2]$ is the subject-specific forgetting rate, $\mathrm{bonus}(a) = \alpha \min_{p \in \mathrm{prereq}(a)} k_p/K$ when all prerequisites exceed threshold $\beta$ (zero otherwise), and $\xi \sim \mathrm{Uniform}\{-1, 0, +1\}$ is the energy noise. The \textbf{reward} is $r_{\text{step}} = -0.1$ per step plus an exam-day reward $r_{\text{exam}} = w_i \sigma(k_i - K/2)$ on subject $i$'s exam day, where $w_i$ is its credit weight and $\sigma$ is the sigmoid. The sigmoid maps zero knowledge to near-zero reward, $K/2$ knowledge to $0.5 w_i$, and mastery to $w_i$.
 
-\paragraph{Configurations.} Three configurations of increasing scale: \textbf{Small} ($N{=}3$, $K{=}5$, $D{=}7$; $\sim$7.6k states), \textbf{Medium} ($N{=}4$, $K{=}8$, $D{=}10$; $\sim$328k states), and \textbf{Large} ($N{=}5$, $K{=}10$, $D{=}14$; $\sim$11.3M states). All use $E = 5$.
+\paragraph{Configurations.} We study three configurations of increasing scale (Table~\ref{tab:env_configs}). Forgetting rates $\lambda_i$ were chosen so subject~1 (the prerequisite-dependent one) decays the fastest, requiring active scheduling pressure; exam weights $w_i$ are asymmetric to create a non-trivial allocation problem. The prerequisite bonus uses $\alpha = 0.5$ and threshold $\beta = K/2$. The energy step uses $c_\text{study} = 1$ when studying and $c_\text{rest} = 1$ when resting, giving an expected drift of $0$ when alternating; the noise $\xi$ is what makes the schedule risky.
+
+\begin{table}[H]
+\centering
+\caption{Environment configurations used in all experiments. Vectors are listed in subject order $(S_0, S_1, \ldots)$. Prerequisites are edges $j \to i$ meaning subject $i$ requires $j$. All configurations use $E = 5$, energy noise $\xi \sim \mathrm{Uniform}\{-1, 0, +1\}$, and per-step cost $-0.1$.}
+\label{tab:env_configs}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccccllll}
+\toprule
+Config & $N$ & $K$ & $D$ & $g_{\max}$ & Forgetting $\boldsymbol{\lambda}$ & Prereqs & Exam days $\mathbf{d}$ & Weights $\mathbf{w}$ \\
+\midrule
+Small  & 3 & 5  & 7  & 2 & (0.05, 0.15, 0.10)                   & $0\!\to\!1$               & (4, 6, 5)         & (3, 4, 2) \\
+Medium & 4 & 8  & 10 & 2 & (0.05, 0.15, 0.10, 0.08)             & $0\!\to\!1$               & (4, 7, 6, 9)      & (3, 4, 2, 3) \\
+Large  & 5 & 10 & 14 & 3 & (0.05, 0.15, 0.10, 0.08, 0.12)       & $0\!\to\!1$, $1\!\to\!2$ & (5, 8, 11, 13, 14)& (3, 4, 5, 2, 3) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+State-space sizes are $|\mathcal{S}| \approx$ 7.6k (Small), 328k (Medium), and 11.3M (Large).
 
 % ============================================================
 \section{Methods}
 \label{sec:methods}
 
-\paragraph{Baselines.} Three non-learning heuristics---\textbf{Uniform} (round-robin), \textbf{Most-Urgent-First} (next exam first), \textbf{Lowest-Knowledge-First}---and three learning baselines: \textbf{Value Iteration} (optimal on Small), \textbf{tabular $\epsilon$-greedy Q-Learning} (Small/Medium), and \textbf{DQN with Double DQN} \citep{mnih2015,vanhasselt2016}, a two-layer MLP (128 units, ReLU) with experience replay and target network.
+We compare eight agents from three families. All learning agents observe a min-max normalized state vector.
 
-\paragraph{CVaR-DQN.} The main contribution. CVaR-DQN \citep{dabney2018} learns $M = 32$ quantile values $\{\theta_i(s, a)\}$ per action and selects actions by
+\subsection{Heuristics (non-learning baselines)}
+
+These three rules require no training and serve as sanity checks: a useful learning agent should beat all of them.
+\begin{itemize}
+    \item \textbf{Uniform.} Round-robin: on day $d$, study subject $(d - 1) \bmod N$. State-independent.
+    \item \textbf{Most-Urgent-First (MUF).} Study the subject whose exam is closest in the future (and has not yet been examined). Ties broken by lower $k_i$.
+    \item \textbf{Lowest-Knowledge-First (LKF).} Study the subject with the lowest current $k_i$, ignoring the exam schedule.
+\end{itemize}
+
+\subsection{Value Iteration}
+
+Value Iteration (VI) \citep{bellman1957,sutton2018} computes the optimal state-value function $V^*$ exactly by iterating the Bellman optimality operator until convergence:
 \begin{equation}
-    a^* = \arg\max_a \, \text{CVaR}_\alpha(s, a), \quad
-    \text{CVaR}_\alpha(s, a) = \frac{1}{\lceil \alpha M \rceil} \sum_{i=1}^{\lceil \alpha M \rceil} \theta_{(i)}(s, a),
+    V_{t+1}(s) \;=\; \max_{a \in \mathcal{A}} \sum_{s'} P(s' \mid s, a)\,\bigl[R(s, a, s') + \gamma V_t(s')\bigr],
+    \label{eq:bellman}
+\end{equation}
+with $\gamma = 0.99$ and stopping tolerance $\max_s |V_{t+1}(s) - V_t(s)| < 10^{-6}$. The optimal policy is $\pi^*(s) = \arg\max_a \mathbb{E}_{s'}[R + \gamma V^*(s')]$. VI is exact but requires enumerating all states; it is tractable only on Small (7.6k states) and gives an upper-bound reference on the mean return achievable in the MDP.
+
+\subsection{Tabular Q-Learning}
+
+Tabular Q-Learning \citep{watkins1992,sutton2018} is the canonical model-free off-policy TD-control method. It maintains $Q(s, a)$ as a lookup table and applies the update
+\begin{equation}
+    Q(s, a) \;\leftarrow\; Q(s, a) + \alpha \big[r + \gamma \max_{a'} Q(s', a') - Q(s, a)\big],
+    \label{eq:qlearning}
+\end{equation}
+with $\epsilon$-greedy exploration. We use $\alpha = 0.1$, $\gamma = 0.99$, and $\epsilon$ decayed geometrically from 1.0 to 0.01 (decay 0.995). The state is hashed by its tuple representation. Q-Learning is feasible on Small and Medium; on Large the table grows to millions of cells and learning becomes too slow to converge in 5{,}000 episodes.
+
+\subsection{DQN (with Double DQN)}
+
+DQN \citep{mnih2015} approximates $Q(s, a)$ by a neural network $Q_\theta$ and stabilizes learning with two devices: (i) an experience-replay buffer $D$ that decorrelates sequential samples and (ii) a periodically-copied target network $Q_{\bar\theta}$ that fixes the bootstrap target. The standard DQN loss on a minibatch $\mathcal{B} \subset D$ is
+\begin{equation*}
+    \mathcal{L}_\text{DQN}(\theta) = \mathbb{E}_{(s, a, r, s') \sim \mathcal{B}} \Big[ \bigl(r + \gamma \max_{a'} Q_{\bar\theta}(s', a') - Q_\theta(s, a)\bigr)^2 \Big].
+\end{equation*}
+We use the \emph{Double DQN} variant \citep{vanhasselt2016} which decouples action selection from evaluation in the target, mitigating the overestimation bias of $\max$:
+\begin{equation}
+    y_\text{DDQN} \;=\; r + \gamma\, Q_{\bar\theta}\bigl(s', \arg\max_{a'} Q_\theta(s', a')\bigr).
+    \label{eq:ddqn}
+\end{equation}
+The network is a two-layer MLP (128 units, ReLU). DQN is our strongest pure mean-maximizing baseline and scales to all three configurations.
+
+\subsection{CVaR-DQN}
+
+\paragraph{Conditional Value at Risk.} For a return random variable $Z$ and risk level $\alpha \in (0, 1]$, $\mathrm{CVaR}_\alpha(Z)$ is the expected return conditional on the worst $\alpha$-fraction of outcomes \citep{rockafellar2000,chow2015}:
+\begin{equation}
+    \mathrm{CVaR}_\alpha(Z) \;=\; \mathbb{E}\bigl[\,Z \,\big|\, Z \leq \mathrm{VaR}_\alpha(Z)\,\bigr], \qquad \mathrm{VaR}_\alpha(Z) = \inf\{z : \Pr(Z \leq z) \geq \alpha\}.
+    \label{eq:cvar_def}
+\end{equation}
+$\mathrm{CVaR}_\alpha$ recovers the mean as $\alpha \to 1$ and the worst-case as $\alpha \to 0$. We use $\alpha = 0.1$, so CVaR measures the average of the worst-10\% returns. This is the standard coherent risk measure used in risk-sensitive finance and RL.
+
+\paragraph{Quantile representation.} Following QR-DQN \citep{dabney2018}, we approximate the return distribution $Z(s, a)$ by $M = 32$ quantile values $\theta_i(s, a)$ anchored at midpoint locations $\hat\tau_i = (2i - 1)/(2M)$ for $i = 1, \ldots, M$. The CVaR is then estimated by averaging the smallest $\lceil \alpha M \rceil$ quantiles, and the risk-sensitive action is
+\begin{equation}
+    a^* = \arg\max_a \, \mathrm{CVaR}_\alpha(s, a), \quad
+    \mathrm{CVaR}_\alpha(s, a) = \frac{1}{\lceil \alpha M \rceil} \sum_{i=1}^{\lceil \alpha M \rceil} \theta_{(i)}(s, a),
     \label{eq:cvar}
 \end{equation}
-with $\alpha = 0.1$ (worst 10\%). Training uses the quantile Huber loss \citep{dabney2018} with asymmetric weighting that pushes each quantile toward its target position in the distribution. Where DQN maximizes the \emph{average} outcome, CVaR-DQN maximizes the \emph{worst-case} outcome.
+where $\theta_{(i)}(s, a)$ is the $i$-th smallest quantile. With $\alpha = 0.1$ and $M = 32$, three quantiles enter the average.
 
-\paragraph{Subject-Constrained CVaR-DQN (pilot).}\label{sec:sc_cvar_dqn} An extension that treats exam scheduling as a Multi-Objective Distributional Constrained MDP. Let $Z_i(s, a)$ be the return attributable to subject $i$ and define a passing threshold $T_i = \tfrac{1}{2} w_i$ (sigmoid midpoint, $\equiv$ knowing $K/2$). The ideal problem
-$\max_a \sum_i \mathbb{E}[Z_i(s, a)]$ s.t.\ $\text{CVaR}_\alpha(Z_i(s, a)) \geq T_i \;\forall i$
-is impractical to solve directly (often-empty feasible set destabilizes Bellman targets), so we use the Lagrangian relaxation
+\paragraph{Loss.} The network is trained by minimizing the quantile Huber loss \citep{dabney2018}:
 \begin{equation}
-    a^* = \arg\max_a \; \sum_i \mathbb{E}[Z_i(s, a)] \; - \; \lambda \sum_i \bigl[\max(0, T_i - \text{CVaR}_\alpha(Z_i(s, a)))\bigr]^2.
+    \mathcal{L}_\text{QR}(\theta) \;=\; \frac{1}{M} \sum_{i=1}^{M} \mathbb{E}_{j}\!\left[\,\bigl|\hat\tau_i - \mathbf{1}\{\delta_{ij} < 0\}\bigr| \cdot \mathcal{L}^\kappa_\text{Huber}(\delta_{ij})\,\right],
+    \label{eq:qrloss}
+\end{equation}
+where $\delta_{ij} = y_j - \theta_i(s, a)$ is the TD-error between predicted quantile $i$ and target quantile $j$, $\mathcal{L}^\kappa_\text{Huber}$ is the Huber loss with threshold $\kappa = 1$, and the indicator weighting (asymmetric in the sign of $\delta$) pushes each quantile to its assigned position in the distribution. The bootstrap target uses Double-DQN-style decoupling: the next action is selected on the online network using the CVaR criterion (Eq.~\ref{eq:cvar}), and the corresponding quantiles are read from the target network.
+
+\paragraph{Summary.} Where DQN maximizes the \emph{average} outcome, CVaR-DQN maximizes the \emph{worst-case} outcome. The only architectural change is the output head ($M$ values per action instead of 1) and the action criterion; replay, target net, optimizer, and exploration are identical to DQN.
+
+\subsection{Subject-Constrained CVaR-DQN (pilot)}
+\label{sec:sc_cvar_dqn}
+
+A pilot extension that treats exam scheduling as a Multi-Objective Distributional Constrained MDP \citep{altman1999,achiam2017}. Let $Z_i(s, a)$ denote the return attributable to subject $i$ and define a passing threshold $T_i = \tfrac{1}{2} w_i$, equal to the sigmoid-midpoint reward (i.e.\ reward earned at $k_i = K/2$). The ideal problem
+\[
+\max_a \sum_i \mathbb{E}[Z_i(s, a)] \quad \text{s.t.} \quad \mathrm{CVaR}_\alpha(Z_i(s, a)) \geq T_i \;\; \forall i
+\]
+is impractical to solve directly: when constraints conflict the feasible set is empty and Bellman targets become unstable. We therefore use the squared-violation Lagrangian relaxation
+\begin{equation}
+    a^* = \arg\max_a \; \sum_i \mathbb{E}[Z_i(s, a)] \; - \; \lambda \sum_i \bigl[\max(0, T_i - \mathrm{CVaR}_\alpha(Z_i(s, a)))\bigr]^2,
     \label{eq:sc_cvar_lagrangian}
 \end{equation}
-with $\lambda = 5$. The quantile network outputs $N \times M$ values per action (one distribution per subject); the quantile Huber loss is averaged across subjects, with per-step reward $r_i$ being the exam score for subject $i$.
+with $\lambda = 5$. The quantile network outputs $N \times M$ values per action (one quantile distribution per subject); the quantile Huber loss is summed over subjects. Per-subject rewards $r_i$ are the exam scores attributed to subject $i$ (zero elsewhere).
 
 % ============================================================
 \section{Experiments and Results}
@@ -294,6 +379,11 @@ We presented a risk-sensitive RL approach to exam study scheduling. CVaR-DQN con
 \paragraph{Limitations \& future work.} The environment uses discrete knowledge levels and a uniform energy-noise model; real cognitive energy is autocorrelated and influenced by exogenous factors. A natural next step is to fit the energy and forgetting processes to \emph{real student data} (sleep-tracker logs, learning-platform telemetry) so the agent can be trained on empirically grounded dynamics. SC-CVaR-DQN training is $\sim$1.3$\times$ slower than CVaR-DQN due to the $N$-fold quantile output.
 
 % ============================================================
+\section*{Acknowledgments}
+
+This work made use of several AI assistants. The implementation of CVaR-DQN, SC-CVaR-DQN, and the supporting experiment harness was written by the author with the assistance of a large language model (Anthropic Claude); the CVaR-DQN implementation follows \citet{dabney2018} and the SC-CVaR-DQN formulation is original to this work. Perplexity AI was used to locate and cross-reference background literature. Google Gemini was used for English-language polishing, grammar, and word choice in the report text. All algorithmic choices, hyperparameters, experimental design, results interpretation, and the substantive content of this report are the author's own.
+
+% ============================================================
 \clearpage
 \bibliographystyle{plainnat}
 \renewcommand{\refname}{References}
@@ -309,6 +399,11 @@ J.~Achiam, D.~Held, A.~Tamar, and P.~Abbeel.
 E.~Altman.
 \newblock \emph{Constrained Markov Decision Processes}.
 \newblock Chapman \& Hall/CRC, 1999.
+
+\bibitem[Bellman(1957)]{bellman1957}
+R.~Bellman.
+\newblock \emph{Dynamic Programming}.
+\newblock Princeton University Press, 1957.
 
 \bibitem[Chow et~al.(2015)]{chow2015}
 Y.~Chow, A.~Tamar, S.~Mannor, and M.~Pavone.
@@ -340,16 +435,104 @@ S.~Reddy, I.~Labutov, S.~Banerjee, and T.~Joachims.
 \newblock Unbounded human learning: Optimal scheduling for spaced repetition.
 \newblock In \emph{KDD}, 2017.
 
+\bibitem[Rockafellar and Uryasev(2000)]{rockafellar2000}
+R.~T. Rockafellar and S.~Uryasev.
+\newblock Optimization of conditional value-at-risk.
+\newblock \emph{Journal of Risk}, 2(3):21--41, 2000.
+
+\bibitem[Sutton and Barto(2018)]{sutton2018}
+R.~S. Sutton and A.~G. Barto.
+\newblock \emph{Reinforcement Learning: An Introduction}.
+\newblock MIT Press, 2nd edition, 2018.
+
 \bibitem[Van~Hasselt et~al.(2016)]{vanhasselt2016}
 H.~Van~Hasselt, A.~Guez, and D.~Silver.
 \newblock Deep reinforcement learning with double Q-learning.
 \newblock In \emph{AAAI Conference on Artificial Intelligence}, 2016.
+
+\bibitem[Watkins and Dayan(1992)]{watkins1992}
+C.~J.~C.~H. Watkins and P.~Dayan.
+\newblock Q-learning.
+\newblock \emph{Machine Learning}, 8(3):279--292, 1992.
 
 \end{thebibliography}
 
 % ============================================================
 \clearpage
 \appendix
+
+\section{Training Parameters}
+\label{app:hyperparams}
+
+All experiments use seeds $\mathcal{Z} = \{42, 123, 456, 789, 1024\}$ (one seed per training+evaluation run). Each agent is trained for $5{,}000$ episodes and evaluated for $1{,}000$ episodes; reported numbers are means over the five seeds (bootstrap 95\% CIs computed in plots). The seed controls Python's \texttt{random}, NumPy, PyTorch, and the environment's internal RNG simultaneously.
+
+\begin{table}[H]
+\centering
+\caption{Shared training schedule. Identical for all RL agents on all configurations.}
+\label{tab:shared_hp}
+\small
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Random seeds                                & $\{42, 123, 456, 789, 1024\}$ \\
+Training episodes                           & $5{,}000$ \\
+Evaluation episodes                         & $1{,}000$ \\
+Discount factor $\gamma$                    & $0.99$ \\
+$\epsilon$-greedy schedule                  & $\epsilon_0 = 1.0 \to \epsilon_\infty = 0.01$, geometric decay $0.995$/episode \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Agent-specific hyperparameters. The DQN, CVaR-DQN, and SC-CVaR-DQN agents share the same optimization/replay setup; risk-related parameters differ.}
+\label{tab:agent_hp}
+\small
+\begin{tabular}{lccccc}
+\toprule
+Parameter & Q-Learning & DQN & CVaR-DQN & SC-CVaR-DQN \\
+\midrule
+Learning rate                               & $0.1$       & $10^{-3}$  & $10^{-3}$  & $10^{-3}$ \\
+Optimizer                                   & --          & Adam       & Adam       & Adam \\
+Hidden architecture                         & tabular     & MLP(128,128) & MLP(128,128) & MLP(128,128) \\
+Activation                                  & --          & ReLU       & ReLU       & ReLU \\
+Replay buffer size                          & --          & $50{,}000$ & $50{,}000$ & $50{,}000$ \\
+Minibatch size                              & --          & $64$       & $64$       & $64$ \\
+Target-network update freq.                 & --          & $100$ steps & $100$ steps & $100$ steps \\
+Double-DQN target                           & --          & yes        & yes (CVaR-selection) & yes (constrained-selection) \\
+Gradient clip ($\ell_2$ max-norm)           & --          & $10$       & $10$       & $10$ \\
+Quantiles $M$                               & --          & --         & $32$       & $32$ \\
+Risk level $\alpha$                         & --          & --         & $0.10$     & $0.10$ \\
+Huber threshold $\kappa$                    & --          & --         & $1.0$      & $1.0$ \\
+Subject thresholds $T_i$                    & --          & --         & --         & $0.5 \, w_i$ \\
+Lagrangian multiplier $\lambda$             & --          & --         & --         & $5.0$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Heuristic and planning agents. No learning rates or replay; these depend only on the configuration.}
+\label{tab:nonlearn_hp}
+\small
+\begin{tabular}{ll}
+\toprule
+Agent & Configuration \\
+\midrule
+Uniform                & State-independent round-robin: action $= (d - 1) \bmod N$. \\
+Most-Urgent-First      & Pick the not-yet-examined subject with the earliest exam day. \\
+Lowest-Knowledge-First & Pick the subject with the lowest current knowledge $k_i$. \\
+Value Iteration        & $\gamma = 0.99$; sweep convergence tolerance $10^{-6}$. Small only (7.6k states). \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The reported main results (Table~\ref{tab:main_results}) run all eight agents across all three configurations for which they are tractable. Ablation (Table~\ref{tab:ablation}) and robustness (Table~\ref{tab:robustness}) studies use the Medium configuration with the same five seeds and the same training schedule.
+
+\paragraph{Software \& reproducibility.} Python~3.10, PyTorch~2.x, NumPy, Gymnasium. The full codebase including the environment, agents, experiment scripts, configurations, and plotting pipeline is available at \url{https://github.com/muhammadov-q/cvar-dqn-study-scheduling}.
+
+% ============================================================
 \section{Supplementary Figures}
 \label{app:figures}
 
