@@ -2,6 +2,8 @@
 
 Risk-sensitive reinforcement learning for optimal exam study scheduling. Compares DQN, CVaR-DQN (distributional RL with worst-case-aware action selection), and a pilot extension SC-CVaR-DQN (multi-objective distributional constrained MDP) against value-iteration and heuristic baselines.
 
+![CVaR-DQN study scheduling architecture](docs/architecture.png)
+
 Project report: [`report/report_formal.pdf`](report/report_formal.pdf) (LaTeX source: [`report/report_formal.tex`](report/report_formal.tex)). Slides: [`report/presentation.tex`](report/presentation.tex).
 
 ## Setup
